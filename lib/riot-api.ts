@@ -72,6 +72,12 @@ export async function getRankedStats(
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error)) {
+      console.error('Ranked stats error details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        url: `https://${region}.api.riotgames.com/lol/league/v4/entries/by-summoner/${summonerId}`,
+      });
       throw new Error(`Failed to fetch ranked stats: ${error.response?.data?.status?.message || error.message}`);
     }
     throw error;
