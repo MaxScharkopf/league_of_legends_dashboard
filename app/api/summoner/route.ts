@@ -16,7 +16,15 @@ export async function GET(request: NextRequest) {
 
   try {
     const summoner = await getSummonerByRiotId(gameName, tagLine, region);
-    const rankedStats = await getRankedStats(summoner.id, region);
+
+    // Try to get ranked stats, but don't fail if it errors
+    let rankedStats = [];
+    try {
+      rankedStats = await getRankedStats(summoner.id, region);
+    } catch (rankedError) {
+      console.error('Error fetching ranked stats (non-fatal):', rankedError);
+      // Continue without ranked stats
+    }
 
     return NextResponse.json({
       summoner,
