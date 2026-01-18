@@ -4,16 +4,21 @@ import { useState } from 'react';
 import SummonerSearch from '@/components/SummonerSearch';
 import SummonerProfile from '@/components/SummonerProfile';
 import JungleStats from '@/components/JungleStats';
+import ChampionStats from '@/components/ChampionStats';
 import MatchHistory from '@/components/MatchHistory';
 import { Summoner, RankedStats, Match } from '@/types/riot';
 
 export default function Home() {
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [summoner, setSummoner] = useState<Summoner | null>(null);
   const [rankedStats, setRankedStats] = useState<RankedStats[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [jungleStats, setJungleStats] = useState<any>(null);
+  const [championStats, setChampionStats] = useState<any[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [currentStart, setCurrentStart] = useState(0);
 
   const handleSearch = async (gameName: string, tagLine: string) => {
     setLoading(true);
@@ -22,6 +27,9 @@ export default function Home() {
     setRankedStats([]);
     setMatches([]);
     setJungleStats(null);
+    setChampionStats([]);
+    setCurrentStart(0);
+    setHasMore(false);
 
     try {
       // Fetch summoner info
@@ -40,7 +48,7 @@ export default function Home() {
 
       // Fetch match history
       const matchesResponse = await fetch(
-        `/api/matches?puuid=${summonerData.puuid}&count=20`
+        `/api/matches?puuid=${summonerData.puuid}&count=20&start=0&returnCount=10`
       );
 
       if (!matchesResponse.ok) {
@@ -48,13 +56,41 @@ export default function Home() {
         throw new Error(errorData.error || 'Failed to fetch matches');
       }
 
-      const { matches: matchesData, jungleStats: jungleStatsData } = await matchesResponse.json();
+      const { matches: matchesData, jungleStats: jungleStatsData, championStats: championStatsData, cacheInfo } = await matchesResponse.json();
       setMatches(matchesData);
       setJungleStats(jungleStatsData);
+      setChampionStats(championStatsData || []);
+      setHasMore(cacheInfo.hasMore);
+      setCurrentStart(10);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLoadMore = async () => {
+    if (!summoner || loadingMore) return;
+
+    setLoadingMore(true);
+    try {
+      const matchesResponse = await fetch(
+        `/api/matches?puuid=${summoner.puuid}&count=20&start=${currentStart}&returnCount=10`
+      );
+
+      if (!matchesResponse.ok) {
+        const errorData = await matchesResponse.json();
+        throw new Error(errorData.error || 'Failed to fetch more matches');
+      }
+
+      const { matches: newMatches, cacheInfo } = await matchesResponse.json();
+      setMatches(prev => [...prev, ...newMatches]);
+      setHasMore(cacheInfo.hasMore);
+      setCurrentStart(prev => prev + 10);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load more matches');
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -102,10 +138,40 @@ export default function Home() {
           <>
             <SummonerProfile summoner={summoner} rankedStats={rankedStats} />
 
+            {/* Champion Stats - Always show if we have matches */}
+            {championStats.length > 0 && (
+              <ChampionStats stats={championStats} />
+            )}
+
             {jungleStats ? (
               <>
                 <JungleStats stats={jungleStats} />
                 <MatchHistory matches={matches} puuid={summoner.puuid} />
+
+                {/* Load More Button */}
+                {hasMore && (
+                  <div className="w-full max-w-4xl mx-auto mt-6 mb-8">
+                    <button
+                      onClick={handleLoadMore}
+                      disabled={loadingMore}
+                      className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    >
+                      {loadingMore ? (
+                        <>
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                          Loading more matches...
+                        </>
+                      ) : (
+                        <>
+                          Load More Matches
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
               </>
             ) : (
               <div className="w-full max-w-4xl mx-auto">

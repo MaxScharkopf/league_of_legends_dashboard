@@ -88,7 +88,8 @@ export async function getRankedStats(
 export async function getMatchHistory(
   puuid: string,
   region: Region = 'na1',
-  count: number = 20
+  count: number = 20,
+  start: number = 0
 ): Promise<string[]> {
   try {
     const routing = ROUTING_MAP[region];
@@ -97,7 +98,7 @@ export async function getMatchHistory(
       {
         headers: { 'X-Riot-Token': API_KEY },
         params: {
-          start: 0,
+          start,
           count,
           type: 'ranked', // Only get ranked games
         },
@@ -132,6 +133,60 @@ export async function getMatchDetails(
     }
     throw error;
   }
+}
+
+// Helper function to calculate champion winrates
+export function calculateChampionStats(matches: Match[], puuid: string) {
+  const championStats: Record<string, {
+    championName: string;
+    games: number;
+    wins: number;
+    losses: number;
+    kills: number;
+    deaths: number;
+    assists: number;
+  }> = {};
+
+  matches.forEach((match) => {
+    const player = match.info.participants.find((p) => p.puuid === puuid);
+    if (!player) return;
+
+    const champName = player.championName;
+
+    if (!championStats[champName]) {
+      championStats[champName] = {
+        championName: champName,
+        games: 0,
+        wins: 0,
+        losses: 0,
+        kills: 0,
+        deaths: 0,
+        assists: 0,
+      };
+    }
+
+    championStats[champName].games++;
+    if (player.win) {
+      championStats[champName].wins++;
+    } else {
+      championStats[champName].losses++;
+    }
+    championStats[champName].kills += player.kills;
+    championStats[champName].deaths += player.deaths;
+    championStats[champName].assists += player.assists;
+  });
+
+  // Convert to array and add calculated stats
+  return Object.values(championStats).map(champ => ({
+    ...champ,
+    winRate: ((champ.wins / champ.games) * 100).toFixed(1),
+    kda: champ.deaths > 0
+      ? ((champ.kills + champ.assists) / champ.deaths).toFixed(2)
+      : 'Perfect',
+    avgKills: (champ.kills / champ.games).toFixed(1),
+    avgDeaths: (champ.deaths / champ.games).toFixed(1),
+    avgAssists: (champ.assists / champ.games).toFixed(1),
+  })).sort((a, b) => b.games - a.games); // Sort by most played
 }
 
 // Helper function to calculate jungle-specific stats from matches

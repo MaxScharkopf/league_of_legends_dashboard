@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMatchHistory, getMatchDetails, calculateJungleStats } from '@/lib/riot-api';
+import { getMatchHistory, getMatchDetails, calculateJungleStats, calculateChampionStats } from '@/lib/riot-api';
 import { getCachedMatches, getCachedMatchIds, saveCachedMatches } from '@/lib/cache';
 
 // Helper function to add delay between API calls
@@ -9,7 +9,9 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const puuid = searchParams.get('puuid');
   const region = (searchParams.get('region') || 'na1') as any;
-  const count = parseInt(searchParams.get('count') || '10'); // Reduced from 20 to 10
+  const count = parseInt(searchParams.get('count') || '20'); // Number of matches to fetch from API
+  const start = parseInt(searchParams.get('start') || '0'); // Offset for pagination
+  const returnCount = parseInt(searchParams.get('returnCount') || '10'); // Number to return to client
 
   if (!puuid) {
     return NextResponse.json(
@@ -25,13 +27,13 @@ export async function GET(request: NextRequest) {
 
     console.log(`Found ${cachedMatches.length} cached matches for ${puuid}`);
 
-    // Get list of recent match IDs from API
-    const allMatchIds = await getMatchHistory(puuid, region, count);
+    // Get list of recent match IDs from API (fetch more to ensure we get new ones)
+    const allMatchIds = await getMatchHistory(puuid, region, count, start);
 
     // Filter out matches we already have cached
     const newMatchIds = allMatchIds.filter(id => !cachedMatchIds.has(id));
 
-    console.log(`${newMatchIds.length} new matches to fetch, ${allMatchIds.length - newMatchIds.length} already cached`);
+    console.log(`${newMatchIds.length} new matches to fetch from API, ${allMatchIds.length - newMatchIds.length} already cached`);
 
     // Fetch details only for new matches
     const newMatches = [];
@@ -62,21 +64,31 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Combine cached and new matches, filter to only requested count
-    const allMatches = [...newMatches, ...cachedMatches]
-      .sort((a, b) => b.info.gameCreation - a.info.gameCreation)
-      .slice(0, count);
+    // Get all cached matches sorted by date
+    const allCachedMatches = getCachedMatches(puuid, region);
+    const sortedMatches = allCachedMatches.sort((a, b) => b.info.gameCreation - a.info.gameCreation);
 
-    // Calculate jungle-specific stats
-    const jungleStats = calculateJungleStats(allMatches, puuid);
+    // Return the requested slice of matches
+    const matchesToReturn = sortedMatches.slice(start, start + returnCount);
+    const hasMore = sortedMatches.length > start + returnCount;
+
+    // Calculate jungle-specific stats from ALL cached matches (not just returned ones)
+    const jungleStats = calculateJungleStats(sortedMatches, puuid);
+
+    // Calculate champion stats from ALL cached matches
+    const championStats = calculateChampionStats(sortedMatches, puuid);
 
     return NextResponse.json({
-      matches: allMatches,
+      matches: matchesToReturn,
       jungleStats,
+      championStats,
       cacheInfo: {
-        cachedMatches: cachedMatches.length,
+        totalCachedMatches: sortedMatches.length,
         newMatchesFetched: newMatches.length,
-        totalMatches: allMatches.length,
+        returnedMatches: matchesToReturn.length,
+        hasMore,
+        currentStart: start,
+        nextStart: start + returnCount,
       },
     });
   } catch (error) {
