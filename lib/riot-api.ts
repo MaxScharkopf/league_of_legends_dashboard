@@ -135,6 +135,84 @@ export async function getMatchDetails(
   }
 }
 
+// Helper function to calculate performance vs enemy junglers
+export function calculateJunglerMatchups(matches: Match[], puuid: string) {
+  // Only look at games where you played jungle
+  const jungleMatches = matches.filter((match) => {
+    const player = match.info.participants.find((p) => p.puuid === puuid);
+    return player?.individualPosition === 'JUNGLE';
+  });
+
+  if (jungleMatches.length === 0) {
+    return [];
+  }
+
+  const matchupStats: Record<string, {
+    enemyJungler: string;
+    games: number;
+    wins: number;
+    losses: number;
+    kills: number;
+    deaths: number;
+    assists: number;
+    goldEarned: number;
+    damageDealt: number;
+  }> = {};
+
+  jungleMatches.forEach((match) => {
+    const player = match.info.participants.find((p) => p.puuid === puuid)!;
+
+    // Find the enemy jungler
+    const enemyJungler = match.info.participants.find(
+      (p) => p.teamId !== player.teamId && p.individualPosition === 'JUNGLE'
+    );
+
+    if (!enemyJungler) return;
+
+    const champName = enemyJungler.championName;
+
+    if (!matchupStats[champName]) {
+      matchupStats[champName] = {
+        enemyJungler: champName,
+        games: 0,
+        wins: 0,
+        losses: 0,
+        kills: 0,
+        deaths: 0,
+        assists: 0,
+        goldEarned: 0,
+        damageDealt: 0,
+      };
+    }
+
+    matchupStats[champName].games++;
+    if (player.win) {
+      matchupStats[champName].wins++;
+    } else {
+      matchupStats[champName].losses++;
+    }
+    matchupStats[champName].kills += player.kills;
+    matchupStats[champName].deaths += player.deaths;
+    matchupStats[champName].assists += player.assists;
+    matchupStats[champName].goldEarned += player.goldEarned;
+    matchupStats[champName].damageDealt += player.totalDamageDealtToChampions;
+  });
+
+  // Convert to array and add calculated stats
+  return Object.values(matchupStats).map(matchup => ({
+    ...matchup,
+    winRate: ((matchup.wins / matchup.games) * 100).toFixed(1),
+    kda: matchup.deaths > 0
+      ? ((matchup.kills + matchup.assists) / matchup.deaths).toFixed(2)
+      : 'Perfect',
+    avgKills: (matchup.kills / matchup.games).toFixed(1),
+    avgDeaths: (matchup.deaths / matchup.games).toFixed(1),
+    avgAssists: (matchup.assists / matchup.games).toFixed(1),
+    avgGold: Math.round(matchup.goldEarned / matchup.games),
+    avgDamage: Math.round(matchup.damageDealt / matchup.games),
+  })).sort((a, b) => b.games - a.games); // Sort by most played first
+}
+
 // Helper function to calculate champion winrates
 export function calculateChampionStats(matches: Match[], puuid: string) {
   const championStats: Record<string, {

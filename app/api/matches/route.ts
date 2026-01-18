@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMatchHistory, getMatchDetails, calculateJungleStats, calculateChampionStats } from '@/lib/riot-api';
+import { getMatchHistory, getMatchDetails, calculateJungleStats, calculateChampionStats, calculateJunglerMatchups } from '@/lib/riot-api';
 import { getCachedMatches, getCachedMatchIds, saveCachedMatches } from '@/lib/cache';
 
 // Helper function to add delay between API calls
@@ -78,10 +78,14 @@ export async function GET(request: NextRequest) {
     // Calculate champion stats from ALL cached matches
     const championStats = calculateChampionStats(sortedMatches, puuid);
 
+    // Calculate jungler matchup stats from ALL cached matches
+    const junglerMatchups = calculateJunglerMatchups(sortedMatches, puuid);
+
     return NextResponse.json({
       matches: matchesToReturn,
       jungleStats,
       championStats,
+      junglerMatchups,
       cacheInfo: {
         totalCachedMatches: sortedMatches.length,
         newMatchesFetched: newMatches.length,

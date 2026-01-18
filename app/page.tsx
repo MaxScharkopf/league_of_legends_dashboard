@@ -5,6 +5,7 @@ import SummonerSearch from '@/components/SummonerSearch';
 import SummonerProfile from '@/components/SummonerProfile';
 import JungleStats from '@/components/JungleStats';
 import ChampionStats from '@/components/ChampionStats';
+import JunglerMatchups from '@/components/JunglerMatchups';
 import MatchHistory from '@/components/MatchHistory';
 import { Summoner, RankedStats, Match } from '@/types/riot';
 
@@ -17,6 +18,7 @@ export default function Home() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [jungleStats, setJungleStats] = useState<any>(null);
   const [championStats, setChampionStats] = useState<any[]>([]);
+  const [junglerMatchups, setJunglerMatchups] = useState<any[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [currentStart, setCurrentStart] = useState(0);
 
@@ -28,6 +30,7 @@ export default function Home() {
     setMatches([]);
     setJungleStats(null);
     setChampionStats([]);
+    setJunglerMatchups([]);
     setCurrentStart(0);
     setHasMore(false);
 
@@ -56,10 +59,11 @@ export default function Home() {
         throw new Error(errorData.error || 'Failed to fetch matches');
       }
 
-      const { matches: matchesData, jungleStats: jungleStatsData, championStats: championStatsData, cacheInfo } = await matchesResponse.json();
+      const { matches: matchesData, jungleStats: jungleStatsData, championStats: championStatsData, junglerMatchups: junglerMatchupsData, cacheInfo } = await matchesResponse.json();
       setMatches(matchesData);
       setJungleStats(jungleStatsData);
       setChampionStats(championStatsData || []);
+      setJunglerMatchups(junglerMatchupsData || []);
       setHasMore(cacheInfo.hasMore);
       setCurrentStart(10);
     } catch (err) {
@@ -141,6 +145,11 @@ export default function Home() {
             {/* Champion Stats - Always show if we have matches */}
             {championStats.length > 0 && (
               <ChampionStats stats={championStats} />
+            )}
+
+            {/* Jungler Matchups - Show if jungle games exist */}
+            {junglerMatchups.length > 0 && (
+              <JunglerMatchups matchups={junglerMatchups} />
             )}
 
             {jungleStats ? (
